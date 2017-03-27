@@ -225,8 +225,8 @@ type LabsHpkpPin struct {
 }
 
 type LabsHpkpDirective struct {
-	Name         string
-	Value        string
+	Name  string
+	Value string
 }
 
 type LabsHpkpPolicy struct {
@@ -1008,6 +1008,8 @@ func main() {
 	hp := NewHostProvider(hostnames)
 	manager := NewManager(hp)
 
+	statusCode := 0
+
 	// Respond to events until all the work is done.
 	for {
 		_, running := <-manager.FrontendEventChannel
@@ -1022,36 +1024,16 @@ func main() {
 			if *conf_grade {
 				// Just the grade(s). We use flatten and RAW
 				/*
-					"endpoints.0.grade": "A"
-					"host": "testing.spatialkey.com"
+					testing.spatialkey.com
+						1.2.3.4: A
 				*/
-				for i := range manager.results.responses {
-					results := []byte(manager.results.responses[i])
-
-					name := ""
-					grade := ""
-
-					flattened := flattenAndFormatJSON(results)
-
-					for _, fval := range *flattened {
-						if strings.HasPrefix(fval, "\"host\"") {
-							// hostname
-							parts := strings.Split(fval, ": ")
-							name = strings.TrimSuffix(parts[1], "\n")
-							if grade != "" {
-								break
-							}
-						} else if strings.HasPrefix(fval, "\"endpoints.0.grade\"") {
-							// grade
-							parts := strings.Split(fval, ": ")
-							grade = strings.TrimSuffix(parts[1], "\n")
-							if name != "" {
-								break
-							}
+				for _, report := range manager.results.reports {
+					fmt.Println(report.Host)
+					for _, endpoint := range report.Endpoints {
+						fmt.Printf("\t%s: %s\n", endpoint.IpAddress, endpoint.Grade)
+						if !strings.Contains(endpoint.Grade, "A") {
+							statusCode = 2
 						}
-					}
-					if grade != "" && name != "" {
-						fmt.Println(name + ": " + grade)
 					}
 				}
 			} else if *conf_json_flat {
@@ -1090,7 +1072,8 @@ func main() {
 				log.Println("[INFO] All assessments complete; shutting down")
 			}
 
-			return
+			break
 		}
 	}
+	os.Exit(statusCode)
 }
